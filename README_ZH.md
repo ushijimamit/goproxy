@@ -1,11 +1,11 @@
-<img src="https://github.com/snail007/goproxy/blob/master/docs/images/logo.jpg?raw=true" width="200"/>  
+<img src="https://github.com/ushijimamit/goproxy/blob/master/docs/images/logo.jpg?raw=true" width="200"/>
 Proxy是golang实现的高性能http,https,websocket,tcp,udp,socks5代理服务器,支持正向代理、反向代理、透明代理、内网穿透、TCP/UDP端口映射、SSH中转、TLS加密传输、协议转换、防污染DNS代理。
 
-[点击下载](https://github.com/snail007/goproxy/releases) 官方QQ交流群:189618940  
+[点击下载](https://github.com/ushijimamit/goproxy/releases) 官方QQ交流群:189618940
 
 ---  
   
-[![stable](https://img.shields.io/badge/stable-stable-green.svg)](https://github.com/snail007/goproxy/) [![license](https://img.shields.io/github/license/snail007/goproxy.svg?style=plastic)]() [![download_count](https://img.shields.io/github/downloads/snail007/goproxy/total.svg?style=plastic)](https://github.com/snail007/goproxy/releases) [![download](https://img.shields.io/github/release/snail007/goproxy.svg?style=plastic)](https://github.com/snail007/goproxy/releases)  
+[![stable](https://img.shields.io/badge/stable-stable-green.svg)](https://github.com/ushijimamit/goproxy/) [![license](https://img.shields.io/github/license/snail007/goproxy.svg?style=plastic)]() [![download_count](https://img.shields.io/github/downloads/snail007/goproxy/total.svg?style=plastic)](https://github.com/ushijimamit/goproxy/releases) [![download](https://img.shields.io/github/release/snail007/goproxy.svg?style=plastic)](https://github.com/ushijimamit/goproxy/releases)
   
 **[English Manual](/README.md)** **[全平台GUI版本](/gui/README.md)**  **[全平台SDK](/sdk/README.md)**
 
@@ -146,10 +146,10 @@ curl -L https://raw.githubusercontent.com/snail007/goproxy/master/install_auto.s
 #### 手动安装  
 
 #### **1.下载proxy**  
-下载地址:https://github.com/snail007/goproxy/releases  
+下载地址:https://github.com/ushijimamit/goproxy/releases
 ```shell  
 cd /root/proxy/  
-wget https://github.com/snail007/goproxy/releases/download/v5.1/proxy-linux-amd64.tar.gz  
+wget https://github.com/ushijimamit/goproxy/releases/download/v5.1/proxy-linux-amd64.tar.gz
 ```  
 #### **2.下载自动安装脚本**  
 ```shell  
@@ -1116,9 +1116,9 @@ pr的时候需要说明做了什么变更,原因是什么.
 
 ### 如何使用源码?   
 建议go1.10.1.       
-`go get github.com/snail007/goproxy`   
+`go get github.com/ushijimamit/goproxy`
 cd进入你的go src目录  
-cd进入`github.com/snail007/goproxy`即可.    
+cd进入`github.com/ushijimamit/goproxy`即可.
 编译直接:`go build -o proxy`        
 运行: `go run *.go`       
 utils是工具包,service是具体的每个服务类. 
@@ -1131,7 +1131,7 @@ QQ交流群:189618940
   
 ### Donation  
 如果proxy帮助你解决了很多问题,你可以通过下面的捐赠更好的支持proxy.  
-<img src="https://github.com/snail007/goproxy/blob/master/docs/images/alipay.jpg?raw=true" width="200"/>  
-<img src="https://github.com/snail007/goproxy/blob/master/docs/images/wxpay.jpg?raw=true" width="200"/>  
+<img src="https://github.com/ushijimamit/goproxy/blob/master/docs/images/alipay.jpg?raw=true" width="200"/>
+<img src="https://github.com/ushijimamit/goproxy/blob/master/docs/images/wxpay.jpg?raw=true" width="200"/>
 
   

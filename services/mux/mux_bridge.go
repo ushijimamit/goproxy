@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snail007/goproxy/services"
-	"github.com/snail007/goproxy/services/kcpcfg"
-	"github.com/snail007/goproxy/utils"
+	"github.com/ushijimamit/goproxy/services"
+	"github.com/ushijimamit/goproxy/services/kcpcfg"
+	"github.com/ushijimamit/goproxy/utils"
 	//"github.com/xtaci/smux"
 	smux "github.com/hashicorp/yamux"
 )
