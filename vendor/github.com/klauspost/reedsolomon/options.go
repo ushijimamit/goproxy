@@ -10,16 +10,17 @@ import (
 type Option func(*options)
 
 type options struct {
-	maxGoroutines              int
-	minSplitSize               int
-	useAVX2, useSSSE3, useSSE2 bool
-	usePAR1Matrix              bool
-	useCauchy                  bool
+	maxGoroutines                         int
+	minSplitSize                          int
+	useAVX512, useAVX2, useSSSE3, useSSE2 bool
+	usePAR1Matrix                         bool
+	useCauchy                             bool
+	shardSize                             int
 }
 
 var defaultOptions = options{
 	maxGoroutines: 384,
-	minSplitSize:  512,
+	minSplitSize:  1024,
 }
 
 func init() {
@@ -28,8 +29,9 @@ func init() {
 	}
 	// Detect CPU capabilities.
 	defaultOptions.useSSSE3 = cpuid.CPU.SSSE3()
-	defaultOptions.useAVX2 = cpuid.CPU.AVX2()
 	defaultOptions.useSSE2 = cpuid.CPU.SSE2()
+	defaultOptions.useAVX2 = cpuid.CPU.AVX2()
+	defaultOptions.useAVX512 = cpuid.CPU.AVX512F() && cpuid.CPU.AVX512BW() && amd64
 }
 
 // WithMaxGoroutines is the maximum number of goroutines number for encoding & decoding.
@@ -43,6 +45,18 @@ func WithMaxGoroutines(n int) Option {
 		if n > 0 {
 			o.maxGoroutines = n
 		}
+	}
+}
+
+// WithAutoGoroutines will adjust the number of goroutines for optimal speed with a
+// specific shard size.
+// Send in the shard size you expect to send. Other shard sizes will work, but may not
+// run at the optimal speed.
+// Overwrites WithMaxGoroutines.
+// If shardSize <= 0, it is ignored.
+func WithAutoGoroutines(shardSize int) Option {
+	return func(o *options) {
+		o.shardSize = shardSize
 	}
 }
 
@@ -72,6 +86,12 @@ func withAVX2(enabled bool) Option {
 func withSSE2(enabled bool) Option {
 	return func(o *options) {
 		o.useSSE2 = enabled
+	}
+}
+
+func withAVX512(enabled bool) Option {
+	return func(o *options) {
+		o.useAVX512 = enabled
 	}
 }
 

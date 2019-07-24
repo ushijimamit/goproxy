@@ -15,12 +15,15 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"runtime"
 	"sync"
+
+	"github.com/klauspost/cpuid"
 )
 
 // Encoder is an interface to encode Reed-Salomon parity sets for your data.
 type Encoder interface {
-	// Encodes parity for a set of data shards.
+	// Encode parity for a set of data shards.
 	// Input is 'shards' containing data shards followed by parity shards.
 	// The number of shards must match the number given to New().
 	// Each shard is a byte array, and they must all be the same size.
@@ -239,6 +242,33 @@ func New(dataShards, parityShards int, opts ...Option) (Encoder, error) {
 	if err != nil {
 		return nil, err
 	}
+	if r.o.shardSize > 0 {
+		cacheSize := cpuid.CPU.Cache.L2
+		if cacheSize <= 0 {
+			// Set to 128K if undetectable.
+			cacheSize = 128 << 10
+		}
+		p := runtime.NumCPU()
+
+		// 1 input + parity must fit in cache, and we add one more to be safer.
+		shards := 1 + parityShards
+		g := (r.o.shardSize * shards) / (cacheSize - (cacheSize >> 4))
+
+		if cpuid.CPU.ThreadsPerCore > 1 {
+			// If multiple threads per core, make sure they don't contend for cache.
+			g *= cpuid.CPU.ThreadsPerCore
+		}
+		g *= 2
+		if g < p {
+			g = p
+		}
+
+		// Have g be multiple of p
+		g += p - 1
+		g -= g % p
+
+		r.o.maxGoroutines = g
+	}
 
 	// Inverted matrices are cached in a tree keyed by the indices
 	// of the invalid rows of the data to reconstruct.
@@ -342,7 +372,7 @@ func (r reedSolomon) updateParityShards(matrixRows, oldinputs, newinputs, output
 		// oldinputs data will be change
 		sliceXor(in, oldin, r.o.useSSE2)
 		for iRow := 0; iRow < outputCount; iRow++ {
-			galMulSliceXor(matrixRows[iRow][c], oldin, outputs[iRow], r.o.useSSSE3, r.o.useAVX2)
+			galMulSliceXor(matrixRows[iRow][c], oldin, outputs[iRow], &r.o)
 		}
 	}
 }
@@ -369,7 +399,7 @@ func (r reedSolomon) updateParityShardsP(matrixRows, oldinputs, newinputs, outpu
 				// oldinputs data will be change
 				sliceXor(in[start:stop], oldin[start:stop], r.o.useSSE2)
 				for iRow := 0; iRow < outputCount; iRow++ {
-					galMulSliceXor(matrixRows[iRow][c], oldin[start:stop], outputs[iRow][start:stop], r.o.useSSSE3, r.o.useAVX2)
+					galMulSliceXor(matrixRows[iRow][c], oldin[start:stop], outputs[iRow][start:stop], &r.o)
 				}
 			}
 			wg.Done()
@@ -407,7 +437,10 @@ func (r reedSolomon) Verify(shards [][]byte) (bool, error) {
 // number of matrix rows used, is determined by
 // outputCount, which is the number of outputs to compute.
 func (r reedSolomon) codeSomeShards(matrixRows, inputs, outputs [][]byte, outputCount, byteCount int) {
-	if r.o.maxGoroutines > 1 && byteCount > r.o.minSplitSize {
+	if r.o.useAVX512 && len(inputs) >= 4 && len(outputs) >= 2 {
+		r.codeSomeShardsAvx512(matrixRows, inputs, outputs, outputCount, byteCount)
+		return
+	} else if r.o.maxGoroutines > 1 && byteCount > r.o.minSplitSize {
 		r.codeSomeShardsP(matrixRows, inputs, outputs, outputCount, byteCount)
 		return
 	}
@@ -415,9 +448,9 @@ func (r reedSolomon) codeSomeShards(matrixRows, inputs, outputs [][]byte, output
 		in := inputs[c]
 		for iRow := 0; iRow < outputCount; iRow++ {
 			if c == 0 {
-				galMulSlice(matrixRows[iRow][c], in, outputs[iRow], r.o.useSSSE3, r.o.useAVX2)
+				galMulSlice(matrixRows[iRow][c], in, outputs[iRow], &r.o)
 			} else {
-				galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], r.o.useSSSE3, r.o.useAVX2)
+				galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], &r.o)
 			}
 		}
 	}
@@ -431,6 +464,8 @@ func (r reedSolomon) codeSomeShardsP(matrixRows, inputs, outputs [][]byte, outpu
 	if do < r.o.minSplitSize {
 		do = r.o.minSplitSize
 	}
+	// Make sizes divisible by 32
+	do = (do + 31) & (^31)
 	start := 0
 	for start < byteCount {
 		if start+do > byteCount {
@@ -439,12 +474,12 @@ func (r reedSolomon) codeSomeShardsP(matrixRows, inputs, outputs [][]byte, outpu
 		wg.Add(1)
 		go func(start, stop int) {
 			for c := 0; c < r.DataShards; c++ {
-				in := inputs[c]
+				in := inputs[c][start:stop]
 				for iRow := 0; iRow < outputCount; iRow++ {
 					if c == 0 {
-						galMulSlice(matrixRows[iRow][c], in[start:stop], outputs[iRow][start:stop], r.o.useSSSE3, r.o.useAVX2)
+						galMulSlice(matrixRows[iRow][c], in, outputs[iRow][start:stop], &r.o)
 					} else {
-						galMulSliceXor(matrixRows[iRow][c], in[start:stop], outputs[iRow][start:stop], r.o.useSSSE3, r.o.useAVX2)
+						galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow][start:stop], &r.o)
 					}
 				}
 			}
@@ -469,7 +504,7 @@ func (r reedSolomon) checkSomeShards(matrixRows, inputs, toCheck [][]byte, outpu
 	for c := 0; c < r.DataShards; c++ {
 		in := inputs[c]
 		for iRow := 0; iRow < outputCount; iRow++ {
-			galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], r.o.useSSSE3, r.o.useAVX2)
+			galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], &r.o)
 		}
 	}
 
@@ -490,6 +525,8 @@ func (r reedSolomon) checkSomeShardsP(matrixRows, inputs, toCheck [][]byte, outp
 	if do < r.o.minSplitSize {
 		do = r.o.minSplitSize
 	}
+	// Make sizes divisible by 32
+	do = (do + 31) & (^31)
 	start := 0
 	for start < byteCount {
 		if start+do > byteCount {
@@ -511,7 +548,7 @@ func (r reedSolomon) checkSomeShardsP(matrixRows, inputs, toCheck [][]byte, outp
 				mu.RUnlock()
 				in := inputs[c][start : start+do]
 				for iRow := 0; iRow < outputCount; iRow++ {
-					galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], r.o.useSSSE3, r.o.useAVX2)
+					galMulSliceXor(matrixRows[iRow][c], in, outputs[iRow], &r.o)
 				}
 			}
 
